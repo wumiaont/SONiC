@@ -130,33 +130,34 @@ Please check the following link for port level MACSEC corresponding IPSEC SAI AP
 
 ![FIPS Overview](images/fips-overview.png)
 
+## SONIC Host Services Support for POST Test
+SWSS needs to know the FIPS state of the chassis. Currently the FIPS information is saved only on host State database. In order for namespace based service such as SWSS to get FIPS information, FIPS config information needs to be populated to based database.
 
-## SONiC FIPS Configuration
+Following code needs to be added into sonic-host-services procDockerstats in update_fipsstats_command.
+        # Update the FIPS state to STATE_DB in namespaces in multi-asic platform
+        for ns, tbl in self.ns_fips_state_tbl.items():
+            tbl.set("state", [('timestamp', datetime.utcnow().isoformat())])
+            tbl.set("state", [('enforced', str(enforced))])
+            tbl.set("state", [('enabled', str(enabled))])
 
-### Enable FIPS on system level
-Set the Linux System parameter sonic_fips=1, to validate if the FIPS is enabled:
-```
-grep 'sonic_fips=1' /proc/cmdline
-```
+## SONIC SWSS Support for POST Test
+In SWSS orchagent main(), needs to check if fips is enabled for the sonic or not. If FIPS is anabled, needs to add following code into attrs list before calling switch_create. This will enable POST test for the macsec engine within the switch and also register a callback function to handle POST result.
 
-There is another parameter fips=1 supported for SymCrypt OpenSSL to enable FIPS. The parameter will enable the Linux Kernel FIPS, but the Linux Kernel FIPS is not supported yet, and it is out of scope in this document. In future, when the FIPS is supported by SONiC Linux Kernel, and the parameter fips=1 has already set, it is not necessary to set sonic_fips=1.
+        attr.id = SAI_SWITCH_ATTR_MACSEC_ENABLE_POST;
+        attr.value.booldata = true;
+        attrs.push_back(attr);
+        SWSS_LOG_NOTICE("Enabled FIPS MACSEC POST test.");
 
-For grub, one of implemetation as below:
-cat /etc/grub.d/99-fips.cfg
-```
-GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT sonic_fips=1"
-```
+        attr.id = SAI_SWITCH_ATTR_MACSEC_POST_STATUS_NOTIFY;
+        attr.value.ptr = (void *)on_macsec_post_status;
+        attrs.push_back(attr);
 
-For uboot, use fw_setenv to variable linuxargs to change the boot options.
-```
-OTHER_OPTIONS=$(fw_printenv linuxargs | sed 's/linuxargs=//')
-fw_setenv linuxargs "$OTHER_OPTIONS sonic_fips=1"
-```
+## SONIC Syncd Support for POST Test
 
-For Aboot, add the config in /host/image-{version}/kernel-cmdline, example:
-```
-reboot=p console=ttyS0 acpi=on Aboot=Aboot-norcal7-7.2.0-pcie2x4-6128821 <other parameters...> sonic_fips=1
-```
+
+
+
+
 
 ### Enable FIPS on application level
 ```
